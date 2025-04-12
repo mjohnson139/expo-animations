@@ -13,6 +13,58 @@ import { BoardCompletedAnimation } from '@/components/animations/BoardCompletedA
 import { HighScoreAnimation } from '@/components/animations/HighScoreAnimation';
 import { OnFireAnimation } from '@/components/animations/OnFireAnimation';
 
+// Mock game board component to demonstrate overlay animations
+const GameBoard = ({ animationType }) => {
+  const backgroundColor = useThemeColor({ light: '#f0f0f0', dark: '#333333' }, 'background');
+  const accentColor = useThemeColor({ light: '#007AFF', dark: '#0A84FF' }, 'tint');
+  
+  // Create a simple grid to represent a game board
+  const renderGrid = () => {
+    const rows = 6;
+    const cols = 6;
+    const cells = [];
+    
+    for (let i = 0; i < rows; i++) {
+      for (let j = 0; j < cols; j++) {
+        // Add some variety to the cells based on animation type
+        let cellColor;
+        if (animationType === 'board-completed') {
+          // Completed board pattern
+          cellColor = (i + j) % 2 === 0 ? '#4CAF50' : '#8BC34A';
+        } else if (animationType === 'high-score') {
+          // High score pattern
+          cellColor = (i + j) % 3 === 0 ? '#FFC107' : (i + j) % 3 === 1 ? '#FF9800' : '#FF5722';
+        } else {
+          // On fire pattern
+          cellColor = (i + j) % 3 === 0 ? '#F44336' : (i + j) % 3 === 1 ? '#E91E63' : '#9C27B0';
+        }
+        
+        cells.push(
+          <View 
+            key={`${i}-${j}`} 
+            style={[
+              styles.gridCell, 
+              { 
+                backgroundColor: cellColor,
+                top: i * 50,
+                left: j * 50
+              }
+            ]} 
+          />
+        );
+      }
+    }
+    
+    return cells;
+  };
+  
+  return (
+    <View style={styles.gameBoardContainer}>
+      {renderGrid()}
+    </View>
+  );
+};
+
 // Animation data that will be displayed in the detail page
 const ANIMATIONS = {
   'board-completed': {
@@ -23,7 +75,9 @@ const ANIMATIONS = {
     controls: [
       { id: 'speed', name: 'Speed', min: 0.1, max: 2, default: 1, step: 0.1 },
       { id: 'particles', name: 'Particles', min: 10, max: 100, default: 50, step: 5 },
-      { id: 'colors', name: 'Color Scheme', options: ['Rainbow', 'Gold', 'Blue', 'Custom'], default: 'Rainbow' }
+      { id: 'colors', name: 'Color Scheme', options: ['Rainbow', 'Gold', 'Blue', 'Custom'], default: 'Rainbow' },
+      { id: 'position', name: 'Position', options: ['center', 'top', 'bottom'], default: 'center' },
+      { id: 'opacity', name: 'Opacity', min: 0.1, max: 1, default: 0.8, step: 0.1 }
     ]
   },
   'high-score': {
@@ -34,7 +88,9 @@ const ANIMATIONS = {
     controls: [
       { id: 'duration', name: 'Duration', min: 1, max: 5, default: 3, step: 0.5 },
       { id: 'intensity', name: 'Intensity', min: 1, max: 10, default: 5, step: 1 },
-      { id: 'sound', name: 'Sound Effect', options: ['Trumpet', 'Applause', 'Chime', 'None'], default: 'Applause' }
+      { id: 'sound', name: 'Sound Effect', options: ['Trumpet', 'Applause', 'Chime', 'None'], default: 'Applause' },
+      { id: 'position', name: 'Position', options: ['center', 'top', 'bottom'], default: 'center' },
+      { id: 'opacity', name: 'Opacity', min: 0.1, max: 1, default: 0.8, step: 0.1 }
     ]
   },
   'on-fire': {
@@ -45,7 +101,10 @@ const ANIMATIONS = {
     controls: [
       { id: 'flame-height', name: 'Flame Height', min: 1, max: 10, default: 5, step: 1 },
       { id: 'flame-color', name: 'Flame Color', options: ['Red-Orange', 'Blue', 'Green', 'Purple'], default: 'Red-Orange' },
-      { id: 'smoke', name: 'Smoke Effect', options: ['None', 'Light', 'Heavy'], default: 'Light' }
+      { id: 'smoke', name: 'Smoke Effect', options: ['None', 'Light', 'Heavy'], default: 'Light' },
+      { id: 'position', name: 'Position', options: ['center', 'bottom', 'top'], default: 'bottom' },
+      { id: 'opacity', name: 'Opacity', min: 0.1, max: 1, default: 0.8, step: 0.1 },
+      { id: 'edge-only', name: 'Edge Only Mode', options: ['Yes', 'No'], default: 'No' }
     ]
   }
 };
@@ -61,11 +120,6 @@ export default function AnimationDetailScreen() {
   const backgroundColor = useThemeColor({ light: '#f0f0f0', dark: '#333333' }, 'background');
   const accentColor = useThemeColor({ light: '#007AFF', dark: '#0A84FF' }, 'tint');
   
-  // Animation values for the preview
-  const scale = useSharedValue(1);
-  const opacity = useSharedValue(0.7);
-  const rotation = useSharedValue(0);
-  
   // Initialize control values
   useEffect(() => {
     if (animation) {
@@ -76,47 +130,6 @@ export default function AnimationDetailScreen() {
       setControlValues(initialValues);
     }
   }, [animation]);
-
-  // Animation effects when playing
-  useEffect(() => {
-    if (isPlaying) {
-      // Start animation
-      scale.value = withTiming(1.1, { duration: 500, easing: Easing.inOut(Easing.ease) });
-      opacity.value = withTiming(1, { duration: 300 });
-      
-      // Create a rotation animation based on the animation type
-      if (animation.type === 'fireworks') {
-        rotation.value = 0; // Reset rotation
-        // No rotation for fireworks
-      } else if (animation.type === 'celebration') {
-        rotation.value = withTiming(360, { 
-          duration: 2000 * (controlValues['duration'] as number || 3),
-          easing: Easing.linear
-        });
-      } else if (animation.type === 'flame') {
-        // Subtle rotation for flame
-        rotation.value = withTiming(10, { 
-          duration: 1000, 
-          easing: Easing.inOut(Easing.ease)
-        });
-      }
-    } else {
-      // Reset animation
-      scale.value = withTiming(1, { duration: 300, easing: Easing.inOut(Easing.ease) });
-      opacity.value = withTiming(0.7, { duration: 300 });
-      rotation.value = withTiming(0, { duration: 300 });
-    }
-  }, [isPlaying, animation?.type, controlValues]);
-
-  const animatedStyle = useAnimatedStyle(() => {
-    return {
-      transform: [
-        { scale: scale.value },
-        { rotate: `${rotation.value}deg` }
-      ],
-      opacity: opacity.value,
-    };
-  });
 
   const handleAnimationComplete = () => {
     setIsPlaying(false);
@@ -177,6 +190,8 @@ export default function AnimationDetailScreen() {
             speed={controlValues.speed as number}
             particles={controlValues.particles as number}
             colorScheme={controlValues.colors as string}
+            position={controlValues.position as string}
+            opacity={controlValues.opacity as number}
           />
         );
       case 'high-score':
@@ -187,6 +202,8 @@ export default function AnimationDetailScreen() {
             duration={controlValues.duration as number}
             intensity={controlValues.intensity as number}
             soundEffect={controlValues.sound as string}
+            position={controlValues.position as string}
+            opacity={controlValues.opacity as number}
           />
         );
       case 'on-fire':
@@ -197,6 +214,9 @@ export default function AnimationDetailScreen() {
             flameHeight={controlValues['flame-height'] as number}
             flameColor={controlValues['flame-color'] as string}
             smokeEffect={controlValues.smoke as string}
+            position={controlValues.position as string}
+            opacity={controlValues.opacity as number}
+            edgeOnly={controlValues['edge-only'] === 'Yes'}
           />
         );
       default:
@@ -220,27 +240,26 @@ export default function AnimationDetailScreen() {
       
       <ScrollView style={styles.scrollView}>
         <View style={styles.animationContainer}>
-          <Animated.View 
-            style={[
-              styles.animationPreview, 
-              { backgroundColor: backgroundColor },
-              animatedStyle
-            ]}
-          >
+          <View style={styles.animationPreview}>
+            {/* Game board to demonstrate overlay */}
+            <GameBoard animationType={id as string} />
+            
+            {/* Animation overlay */}
+            {renderAnimation()}
+            
             {!isPlaying && (
-              <>
+              <View style={styles.previewOverlay}>
                 <Ionicons 
                   name={getAnimationIcon()} 
                   size={80} 
                   color={accentColor} 
                 />
                 <ThemedText style={styles.animationPreviewText}>
-                  Preview
+                  Tap Play to preview overlay animation
                 </ThemedText>
-              </>
+              </View>
             )}
-            {renderAnimation()}
-          </Animated.View>
+          </View>
           
           <View style={styles.playbackControls}>
             <TouchableOpacity
@@ -296,6 +315,37 @@ export default function AnimationDetailScreen() {
             }
           })}
         </View>
+        
+        <View style={styles.overlayInfoSection}>
+          <ThemedText style={styles.overlayInfoTitle}>Overlay Animation Features</ThemedText>
+          <ThemedText style={styles.overlayInfoText}>
+            These animations are designed to work as overlays on your game board. They use transparency
+            and non-interactive elements to ensure they don't interfere with gameplay while providing
+            visual feedback to players.
+          </ThemedText>
+          
+          <ThemedText style={styles.overlayFeatureTitle}>Key Features:</ThemedText>
+          <View style={styles.featureItem}>
+            <Ionicons name="checkmark-circle" size={20} color={accentColor} style={styles.featureIcon} />
+            <ThemedText style={styles.featureText}>Transparent elements that don't obscure game content</ThemedText>
+          </View>
+          <View style={styles.featureItem}>
+            <Ionicons name="checkmark-circle" size={20} color={accentColor} style={styles.featureIcon} />
+            <ThemedText style={styles.featureText}>Configurable positioning (center, top, bottom)</ThemedText>
+          </View>
+          <View style={styles.featureItem}>
+            <Ionicons name="checkmark-circle" size={20} color={accentColor} style={styles.featureIcon} />
+            <ThemedText style={styles.featureText}>Adjustable opacity to match your game's visual style</ThemedText>
+          </View>
+          <View style={styles.featureItem}>
+            <Ionicons name="checkmark-circle" size={20} color={accentColor} style={styles.featureIcon} />
+            <ThemedText style={styles.featureText}>Non-interactive (pointerEvents: 'none') to allow gameplay to continue</ThemedText>
+          </View>
+          <View style={styles.featureItem}>
+            <Ionicons name="checkmark-circle" size={20} color={accentColor} style={styles.featureIcon} />
+            <ThemedText style={styles.featureText}>Edge-only mode for subtle visual indicators (You're On Fire animation)</ThemedText>
+          </View>
+        </View>
       </ScrollView>
     </ThemedView>
   );
@@ -325,11 +375,21 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginBottom: 24,
     overflow: 'hidden',
+    borderWidth: 1,
+    borderColor: '#ccc',
+  },
+  previewOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(0,0,0,0.1)',
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   animationPreviewText: {
     fontSize: 16,
     opacity: 0.7,
     marginTop: 12,
+    textAlign: 'center',
+    paddingHorizontal: 20,
   },
   playbackControls: {
     flexDirection: 'row',
@@ -370,11 +430,55 @@ const styles = StyleSheet.create({
   },
   controlsSection: {
     padding: 16,
-    paddingBottom: 32,
+    borderBottomWidth: 1,
+    borderBottomColor: '#e0e0e0',
   },
   controlsTitle: {
     fontSize: 20,
     fontWeight: 'bold',
     marginBottom: 16,
+  },
+  overlayInfoSection: {
+    padding: 16,
+    paddingBottom: 32,
+  },
+  overlayInfoTitle: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    marginBottom: 8,
+  },
+  overlayInfoText: {
+    fontSize: 16,
+    lineHeight: 24,
+    marginBottom: 16,
+  },
+  overlayFeatureTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    marginBottom: 8,
+  },
+  featureItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  featureIcon: {
+    marginRight: 8,
+  },
+  featureText: {
+    fontSize: 16,
+    flex: 1,
+  },
+  gameBoardContainer: {
+    width: 300,
+    height: 300,
+    position: 'relative',
+  },
+  gridCell: {
+    position: 'absolute',
+    width: 50,
+    height: 50,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.2)',
   },
 });

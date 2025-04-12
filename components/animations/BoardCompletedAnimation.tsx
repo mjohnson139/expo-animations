@@ -6,14 +6,16 @@ import Animated, {
   withTiming,
   withDelay,
   withSequence,
+  withRepeat,
   Easing,
+  interpolateColor,
   runOnJS
 } from 'react-native-reanimated';
 
 const { width, height } = Dimensions.get('window');
 
-// Firework particle component
-const Particle = ({ 
+// Ripple effect component for the fireworks animation
+const RippleParticle = ({ 
   index, 
   x, 
   y, 
@@ -23,6 +25,12 @@ const Particle = ({
   particleCount,
   onAnimationComplete 
 }) => {
+  // Animation values
+  const scale = useSharedValue(0);
+  const opacity = useSharedValue(0);
+  const translateX = useSharedValue(0);
+  const translateY = useSharedValue(0);
+  
   // Calculate angle for this particle (distribute in a circle)
   const angle = (index / particleCount) * Math.PI * 2;
   
@@ -30,48 +38,39 @@ const Particle = ({
   const distance = Math.random() * 100 + 50;
   
   // Calculate target position
-  const targetX = x + Math.cos(angle) * distance;
-  const targetY = y + Math.sin(angle) * distance;
-  
-  // Animation values
-  const translateX = useSharedValue(x);
-  const translateY = useSharedValue(y);
-  const scale = useSharedValue(0);
-  const opacity = useSharedValue(1);
+  const targetX = Math.cos(angle) * distance;
+  const targetY = Math.sin(angle) * distance;
 
   useEffect(() => {
-    // Start position
-    translateX.value = x;
-    translateY.value = y;
+    // Initial state
     scale.value = 0;
-    opacity.value = 1;
+    opacity.value = 0;
+    translateX.value = 0;
+    translateY.value = 0;
     
-    // Animate to target position
+    // Start animation sequence
+    opacity.value = withTiming(0.8, { 
+      duration: 100,
+      easing: Easing.inOut(Easing.quad)
+    });
+    
+    scale.value = withTiming(1, { 
+      duration: 200,
+      easing: Easing.out(Easing.back(1.5))
+    });
+    
+    // Move particles outward
     translateX.value = withTiming(targetX, { 
       duration: 1000 / speed,
       easing: Easing.out(Easing.quad)
     });
     
-    translateY.value = withSequence(
-      // First go up slightly
-      withTiming(y - 20, { 
-        duration: 200 / speed,
-        easing: Easing.out(Easing.quad)
-      }),
-      // Then fall to target
-      withTiming(targetY, { 
-        duration: 800 / speed,
-        easing: Easing.out(Easing.quad)
-      })
-    );
-    
-    // Scale up quickly
-    scale.value = withTiming(1, { 
-      duration: 200 / speed,
+    translateY.value = withTiming(targetY, { 
+      duration: 1000 / speed,
       easing: Easing.out(Easing.quad)
     });
     
-    // Fade out at the end
+    // Fade out
     opacity.value = withDelay(
       800 / speed,
       withTiming(0, { 
@@ -99,7 +98,7 @@ const Particle = ({
   return (
     <Animated.View
       style={[
-        styles.particle,
+        styles.rippleParticle,
         {
           width: size,
           height: size,
@@ -112,17 +111,66 @@ const Particle = ({
   );
 };
 
-// Main fireworks component
+// Main fireworks component using ripple effect
 export const BoardCompletedAnimation = ({ 
   isPlaying, 
   onAnimationComplete,
   speed = 1,
   particles = 50,
-  colorScheme = 'Rainbow'
+  colorScheme = 'Rainbow',
+  position = 'center', // 'center', 'top', 'bottom'
+  opacity = 0.8,
+  size = 1.0
 }) => {
-  // Center position
-  const centerX = width / 2;
-  const centerY = height / 2;
+  // Center position based on position prop
+  let centerX, centerY;
+  
+  switch (position) {
+    case 'top':
+      centerX = width / 2;
+      centerY = height * 0.25;
+      break;
+    case 'bottom':
+      centerX = width / 2;
+      centerY = height * 0.75;
+      break;
+    case 'center':
+    default:
+      centerX = width / 2;
+      centerY = height / 2;
+  }
+  
+  // Ripple wave animation
+  const rippleScale = useSharedValue(0);
+  const rippleOpacity = useSharedValue(0);
+  
+  useEffect(() => {
+    if (isPlaying) {
+      // Initial state
+      rippleScale.value = 0;
+      rippleOpacity.value = 0;
+      
+      // Animate ripple wave
+      rippleOpacity.value = withTiming(0.5, { duration: 100 });
+      rippleScale.value = withTiming(1, { 
+        duration: 1000 / speed,
+        easing: Easing.out(Easing.cubic)
+      });
+      
+      // Fade out ripple
+      rippleOpacity.value = withDelay(
+        500 / speed,
+        withTiming(0, { duration: 500 / speed })
+      );
+    }
+  }, [isPlaying]);
+  
+  const rippleStyle = useAnimatedStyle(() => {
+    return {
+      transform: [{ scale: rippleScale.value }],
+      opacity: rippleOpacity.value,
+    };
+  });
   
   // Generate particles when animation is playing
   const particleElements = isPlaying ? Array.from({ length: particles }).map((_, index) => {
@@ -130,15 +178,16 @@ export const BoardCompletedAnimation = ({
     let color;
     switch (colorScheme) {
       case 'Gold':
-        color = `rgb(255, ${180 + Math.floor(Math.random() * 75)}, ${Math.floor(Math.random() * 100)})`;
+        color = `rgba(255, ${180 + Math.floor(Math.random() * 75)}, ${Math.floor(Math.random() * 100)}, ${opacity})`;
         break;
       case 'Blue':
-        color = `rgb(${Math.floor(Math.random() * 100)}, ${100 + Math.floor(Math.random() * 155)}, 255)`;
+        color = `rgba(${Math.floor(Math.random() * 100)}, ${100 + Math.floor(Math.random() * 155)}, 255, ${opacity})`;
         break;
       case 'Custom':
         // Custom rainbow with more purples and pinks
         const hue = Math.floor(Math.random() * 360);
-        color = `hsl(${hue}, 100%, 60%)`;
+        const lightness = 50 + Math.floor(Math.random() * 30);
+        color = `hsla(${hue}, 100%, ${lightness}%, ${opacity})`;
         break;
       case 'Rainbow':
       default:
@@ -146,20 +195,20 @@ export const BoardCompletedAnimation = ({
         const r = Math.floor(Math.random() * 255);
         const g = Math.floor(Math.random() * 255);
         const b = Math.floor(Math.random() * 255);
-        color = `rgb(${r}, ${g}, ${b})`;
+        color = `rgba(${r}, ${g}, ${b}, ${opacity})`;
     }
     
-    // Random size for particles
-    const size = Math.random() * 6 + 4;
+    // Random size for particles, scaled by the size prop
+    const particleSize = (Math.random() * 6 + 4) * size;
     
     return (
-      <Particle
+      <RippleParticle
         key={index}
         index={index}
         x={centerX}
         y={centerY}
         color={color}
-        size={size}
+        size={particleSize}
         speed={speed}
         particleCount={particles}
         onAnimationComplete={onAnimationComplete}
@@ -168,7 +217,27 @@ export const BoardCompletedAnimation = ({
   }) : null;
 
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, { pointerEvents: 'none' }]}>
+      {isPlaying && (
+        <Animated.View 
+          style={[
+            styles.rippleWave,
+            {
+              width: 200 * size,
+              height: 200 * size,
+              borderRadius: 100 * size,
+              backgroundColor: colorScheme === 'Gold' 
+                ? 'rgba(255, 215, 0, 0.2)' 
+                : colorScheme === 'Blue' 
+                  ? 'rgba(0, 100, 255, 0.2)'
+                  : 'rgba(255, 255, 255, 0.2)',
+              top: centerY - 100 * size,
+              left: centerX - 100 * size,
+            },
+            rippleStyle
+          ]}
+        />
+      )}
       {particleElements}
     </View>
   );
@@ -179,8 +248,14 @@ const styles = StyleSheet.create({
     ...StyleSheet.absoluteFillObject,
     justifyContent: 'center',
     alignItems: 'center',
+    zIndex: 1000, // Ensure it's above game elements
   },
-  particle: {
+  rippleParticle: {
     position: 'absolute',
   },
+  rippleWave: {
+    position: 'absolute',
+    justifyContent: 'center',
+    alignItems: 'center',
+  }
 });

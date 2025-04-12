@@ -1,5 +1,5 @@
 import React, { useEffect } from 'react';
-import { View, StyleSheet, Dimensions } from 'react-native';
+import { View, StyleSheet, Dimensions, Text } from 'react-native';
 import Animated, {
   useSharedValue,
   useAnimatedStyle,
@@ -17,19 +17,23 @@ const { width, height } = Dimensions.get('window');
 // Flame particle component
 const FlameParticle = ({ 
   index, 
-  x, 
-  y, 
+  position,
   flameHeight, 
   flameColor, 
   smokeEffect,
+  opacity,
   onAnimationComplete 
 }) => {
   // Animation values
   const translateY = useSharedValue(0);
   const translateX = useSharedValue(0);
   const scale = useSharedValue(0);
-  const opacity = useSharedValue(0);
+  const particleOpacity = useSharedValue(0);
   const colorProgress = useSharedValue(0);
+  
+  // Base position
+  const baseX = position.x;
+  const baseY = position.y;
   
   // Particle size based on position (smaller at top)
   const size = Math.max(5, 20 - (index % 5) * 3);
@@ -38,21 +42,21 @@ const FlameParticle = ({
   let baseColor, topColor;
   switch (flameColor) {
     case 'Blue':
-      baseColor = '#0066FF';
-      topColor = '#66CCFF';
+      baseColor = `rgba(0, 102, 255, ${opacity})`;
+      topColor = `rgba(102, 204, 255, ${opacity})`;
       break;
     case 'Green':
-      baseColor = '#00CC66';
-      topColor = '#66FFCC';
+      baseColor = `rgba(0, 204, 102, ${opacity})`;
+      topColor = `rgba(102, 255, 204, ${opacity})`;
       break;
     case 'Purple':
-      baseColor = '#9933FF';
-      topColor = '#CC99FF';
+      baseColor = `rgba(153, 51, 255, ${opacity})`;
+      topColor = `rgba(204, 153, 255, ${opacity})`;
       break;
     case 'Red-Orange':
     default:
-      baseColor = '#FF3300';
-      topColor = '#FFCC00';
+      baseColor = `rgba(255, 51, 0, ${opacity})`;
+      topColor = `rgba(255, 204, 0, ${opacity})`;
   }
   
   // Add smoke effect if enabled
@@ -61,13 +65,13 @@ const FlameParticle = ({
   
   useEffect(() => {
     // Initial position with slight randomness
-    const startX = x + (Math.random() * 20 - 10);
+    const startX = (Math.random() * 20 - 10);
     translateX.value = startX;
-    translateY.value = y;
+    translateY.value = 0;
     
     // Random movement pattern
     const moveX = startX + (Math.random() * 30 - 15);
-    const moveY = y - (50 + Math.random() * 50) * flameHeight / 5;
+    const moveY = -(50 + Math.random() * 50) * flameHeight / 5;
     
     // Animate position
     translateX.value = withDelay(
@@ -106,10 +110,10 @@ const FlameParticle = ({
     );
     
     // Animate opacity
-    opacity.value = withDelay(
+    particleOpacity.value = withDelay(
       index * 10,
       withSequence(
-        withTiming(isSmoke ? smokeIntensity : 0.8 + Math.random() * 0.2, { 
+        withTiming(isSmoke ? smokeIntensity * opacity : 0.8 * opacity, { 
           duration: 300,
           easing: Easing.out(Easing.quad)
         }),
@@ -146,7 +150,7 @@ const FlameParticle = ({
         { translateY: translateY.value },
         { scale: scale.value }
       ],
-      opacity: opacity.value,
+      opacity: particleOpacity.value,
       backgroundColor,
       borderRadius: isSmoke ? size : size / 2,
     };
@@ -159,6 +163,8 @@ const FlameParticle = ({
         {
           width: size,
           height: size,
+          left: baseX,
+          bottom: baseY,
         },
         animatedStyle,
       ]}
@@ -167,9 +173,9 @@ const FlameParticle = ({
 };
 
 // Text overlay for "You're On Fire!"
-const FireText = () => {
+const FireText = ({ position, opacity = 0.9 }) => {
   const scale = useSharedValue(0);
-  const opacity = useSharedValue(0);
+  const textOpacity = useSharedValue(0);
   
   useEffect(() => {
     // Animate in
@@ -185,7 +191,7 @@ const FireText = () => {
       })
     );
     
-    opacity.value = withTiming(1, { 
+    textOpacity.value = withTiming(opacity, { 
       duration: 300,
       easing: Easing.inOut(Easing.quad)
     });
@@ -214,14 +220,137 @@ const FireText = () => {
   const animatedStyle = useAnimatedStyle(() => {
     return {
       transform: [{ scale: scale.value }],
-      opacity: opacity.value,
+      opacity: textOpacity.value,
     };
   });
 
   return (
-    <Animated.View style={[styles.fireTextContainer, animatedStyle]}>
-      <Animated.Text style={styles.fireText}>YOU'RE ON FIRE!</Animated.Text>
+    <Animated.View 
+      style={[
+        styles.fireTextContainer, 
+        { top: position.y - 100 },
+        animatedStyle
+      ]}
+    >
+      <Text style={styles.fireText}>YOU'RE ON FIRE!</Text>
     </Animated.View>
+  );
+};
+
+// Edge flame effect
+const EdgeFlame = ({ 
+  side, // 'left', 'right', 'bottom', 'top'
+  flameColor,
+  flameHeight,
+  opacity
+}) => {
+  const flameIntensity = useSharedValue(0);
+  
+  useEffect(() => {
+    flameIntensity.value = withRepeat(
+      withSequence(
+        withTiming(1, { 
+          duration: 500,
+          easing: Easing.inOut(Easing.quad)
+        }),
+        withTiming(0.7, { 
+          duration: 500,
+          easing: Easing.inOut(Easing.quad)
+        })
+      ),
+      -1, // Infinite
+      true // Reverse
+    );
+  }, []);
+  
+  // Determine base colors based on flame color selection
+  let baseColor, topColor;
+  switch (flameColor) {
+    case 'Blue':
+      baseColor = `rgba(0, 102, 255, ${opacity})`;
+      topColor = `rgba(102, 204, 255, ${opacity * 0.7})`;
+      break;
+    case 'Green':
+      baseColor = `rgba(0, 204, 102, ${opacity})`;
+      topColor = `rgba(102, 255, 204, ${opacity * 0.7})`;
+      break;
+    case 'Purple':
+      baseColor = `rgba(153, 51, 255, ${opacity})`;
+      topColor = `rgba(204, 153, 255, ${opacity * 0.7})`;
+      break;
+    case 'Red-Orange':
+    default:
+      baseColor = `rgba(255, 51, 0, ${opacity})`;
+      topColor = `rgba(255, 204, 0, ${opacity * 0.7})`;
+  }
+  
+  const animatedStyle = useAnimatedStyle(() => {
+    return {
+      opacity: flameIntensity.value * opacity,
+    };
+  });
+  
+  // Determine position and dimensions based on side
+  let styleProps = {};
+  
+  switch (side) {
+    case 'left':
+      styleProps = {
+        left: 0,
+        top: height * 0.3,
+        width: 10 * flameHeight,
+        height: height * 0.4,
+        borderTopRightRadius: 20,
+        borderBottomRightRadius: 20,
+        backgroundGradient: { x: 0, y: 0.5 }
+      };
+      break;
+    case 'right':
+      styleProps = {
+        right: 0,
+        top: height * 0.3,
+        width: 10 * flameHeight,
+        height: height * 0.4,
+        borderTopLeftRadius: 20,
+        borderBottomLeftRadius: 20,
+        backgroundGradient: { x: 1, y: 0.5 }
+      };
+      break;
+    case 'bottom':
+      styleProps = {
+        bottom: 0,
+        left: width * 0.2,
+        width: width * 0.6,
+        height: 10 * flameHeight,
+        borderTopLeftRadius: 20,
+        borderTopRightRadius: 20,
+        backgroundGradient: { x: 0.5, y: 1 }
+      };
+      break;
+    case 'top':
+      styleProps = {
+        top: 0,
+        left: width * 0.2,
+        width: width * 0.6,
+        height: 10 * flameHeight,
+        borderBottomLeftRadius: 20,
+        borderBottomRightRadius: 20,
+        backgroundGradient: { x: 0.5, y: 0 }
+      };
+      break;
+  }
+  
+  return (
+    <Animated.View
+      style={[
+        styles.edgeFlame,
+        styleProps,
+        {
+          backgroundColor: baseColor,
+        },
+        animatedStyle
+      ]}
+    />
   );
 };
 
@@ -231,35 +360,84 @@ export const OnFireAnimation = ({
   onAnimationComplete,
   flameHeight = 5,
   flameColor = 'Red-Orange',
-  smokeEffect = 'Light'
+  smokeEffect = 'Light',
+  position = 'center', // 'center', 'top', 'bottom'
+  opacity = 0.8,
+  edgeOnly = false // New prop to show flames only at the edges
 }) => {
-  // Base position for flames
-  const baseX = width / 2;
-  const baseY = height * 0.7;
+  // Determine position based on the position prop
+  let centerPosition = { x: 0, y: 0 };
+  
+  switch (position) {
+    case 'top':
+      centerPosition = { x: width / 2, y: height * 0.25 };
+      break;
+    case 'bottom':
+      centerPosition = { x: width / 2, y: height * 0.1 };
+      break;
+    case 'center':
+    default:
+      centerPosition = { x: width / 2, y: height * 0.1 };
+  }
   
   // Number of particles based on flame height
-  const particleCount = Math.floor(flameHeight * 20);
+  const particleCount = edgeOnly ? 0 : Math.floor(flameHeight * 20);
   
-  // Generate flame particles when animation is playing
-  const flameElements = isPlaying ? Array.from({ length: particleCount }).map((_, index) => {
+  // Generate flame particles when animation is playing and not in edge-only mode
+  const flameElements = (isPlaying && !edgeOnly) ? Array.from({ length: particleCount }).map((_, index) => {
     return (
       <FlameParticle
         key={index}
         index={index}
-        x={baseX}
-        y={baseY}
+        position={centerPosition}
         flameHeight={flameHeight}
         flameColor={flameColor}
         smokeEffect={smokeEffect}
+        opacity={opacity}
         onAnimationComplete={onAnimationComplete}
       />
     );
   }) : null;
+  
+  // Edge flames (always shown, more prominent in edge-only mode)
+  const edgeFlames = isPlaying ? (
+    <>
+      <EdgeFlame 
+        side="left" 
+        flameColor={flameColor} 
+        flameHeight={flameHeight} 
+        opacity={edgeOnly ? opacity : opacity * 0.6} 
+      />
+      <EdgeFlame 
+        side="right" 
+        flameColor={flameColor} 
+        flameHeight={flameHeight} 
+        opacity={edgeOnly ? opacity : opacity * 0.6} 
+      />
+      <EdgeFlame 
+        side="bottom" 
+        flameColor={flameColor} 
+        flameHeight={flameHeight} 
+        opacity={edgeOnly ? opacity : opacity * 0.6} 
+      />
+      {edgeOnly && (
+        <EdgeFlame 
+          side="top" 
+          flameColor={flameColor} 
+          flameHeight={flameHeight} 
+          opacity={opacity * 0.4} 
+        />
+      )}
+    </>
+  ) : null;
 
   return (
-    <View style={styles.container}>
-      {isPlaying && <FireText />}
+    <View style={[styles.container, { pointerEvents: 'none' }]}>
+      {isPlaying && !edgeOnly && (
+        <FireText position={centerPosition} opacity={opacity} />
+      )}
       {flameElements}
+      {edgeFlames}
     </View>
   );
 };
@@ -269,16 +447,16 @@ const styles = StyleSheet.create({
     ...StyleSheet.absoluteFillObject,
     justifyContent: 'center',
     alignItems: 'center',
+    zIndex: 1000, // Ensure it's above game elements
   },
   flameParticle: {
     position: 'absolute',
   },
   fireTextContainer: {
     position: 'absolute',
-    top: height * 0.3,
     alignItems: 'center',
     justifyContent: 'center',
-    zIndex: 10,
+    zIndex: 1001,
   },
   fireText: {
     fontSize: 36,
@@ -288,4 +466,8 @@ const styles = StyleSheet.create({
     textShadowOffset: { width: 2, height: 2 },
     textShadowRadius: 5,
   },
+  edgeFlame: {
+    position: 'absolute',
+    zIndex: 999,
+  }
 });
