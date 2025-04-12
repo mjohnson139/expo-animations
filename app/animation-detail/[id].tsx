@@ -9,6 +9,9 @@ import { ThemedText } from '@/components/ThemedText';
 import { ThemedView } from '@/components/ThemedView';
 import { AnimationControl } from '@/components/AnimationControl';
 import { useThemeColor } from '@/hooks/useThemeColor';
+import { BoardCompletedAnimation } from '@/components/animations/BoardCompletedAnimation';
+import { HighScoreAnimation } from '@/components/animations/HighScoreAnimation';
+import { OnFireAnimation } from '@/components/animations/OnFireAnimation';
 
 // Animation data that will be displayed in the detail page
 const ANIMATIONS = {
@@ -115,6 +118,10 @@ export default function AnimationDetailScreen() {
     };
   });
 
+  const handleAnimationComplete = () => {
+    setIsPlaying(false);
+  };
+
   if (!animation) {
     return (
       <ThemedView style={styles.container}>
@@ -157,6 +164,46 @@ export default function AnimationDetailScreen() {
     }
   };
 
+  // Render the appropriate animation based on the animation ID
+  const renderAnimation = () => {
+    if (!isPlaying) return null;
+
+    switch (id) {
+      case 'board-completed':
+        return (
+          <BoardCompletedAnimation 
+            isPlaying={isPlaying}
+            onAnimationComplete={handleAnimationComplete}
+            speed={controlValues.speed as number}
+            particles={controlValues.particles as number}
+            colorScheme={controlValues.colors as string}
+          />
+        );
+      case 'high-score':
+        return (
+          <HighScoreAnimation 
+            isPlaying={isPlaying}
+            onAnimationComplete={handleAnimationComplete}
+            duration={controlValues.duration as number}
+            intensity={controlValues.intensity as number}
+            soundEffect={controlValues.sound as string}
+          />
+        );
+      case 'on-fire':
+        return (
+          <OnFireAnimation 
+            isPlaying={isPlaying}
+            onAnimationComplete={handleAnimationComplete}
+            flameHeight={controlValues['flame-height'] as number}
+            flameColor={controlValues['flame-color'] as string}
+            smokeEffect={controlValues.smoke as string}
+          />
+        );
+      default:
+        return null;
+    }
+  };
+
   return (
     <ThemedView style={styles.container}>
       <Stack.Screen
@@ -180,14 +227,19 @@ export default function AnimationDetailScreen() {
               animatedStyle
             ]}
           >
-            <Ionicons 
-              name={getAnimationIcon()} 
-              size={80} 
-              color={accentColor} 
-            />
-            <ThemedText style={styles.animationPreviewText}>
-              {isPlaying ? 'Animation Playing' : 'Preview'}
-            </ThemedText>
+            {!isPlaying && (
+              <>
+                <Ionicons 
+                  name={getAnimationIcon()} 
+                  size={80} 
+                  color={accentColor} 
+                />
+                <ThemedText style={styles.animationPreviewText}>
+                  Preview
+                </ThemedText>
+              </>
+            )}
+            {renderAnimation()}
           </Animated.View>
           
           <View style={styles.playbackControls}>
@@ -266,12 +318,13 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   animationPreview: {
-    width: 200,
-    height: 200,
+    width: 300,
+    height: 300,
     borderRadius: 16,
     justifyContent: 'center',
     alignItems: 'center',
     marginBottom: 24,
+    overflow: 'hidden',
   },
   animationPreviewText: {
     fontSize: 16,
