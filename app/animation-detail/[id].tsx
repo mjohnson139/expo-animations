@@ -1,11 +1,14 @@
 import { Stack, useLocalSearchParams } from 'expo-router';
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { StyleSheet, View, TouchableOpacity, ScrollView } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
+import Animated, { useSharedValue, useAnimatedStyle, withTiming, Easing } from 'react-native-reanimated';
 
 import { ThemedText } from '@/components/ThemedText';
 import { ThemedView } from '@/components/ThemedView';
+import { AnimationControl } from '@/components/AnimationControl';
+import { useThemeColor } from '@/hooks/useThemeColor';
 
 // Animation data that will be displayed in the detail page
 const ANIMATIONS = {
@@ -15,8 +18,8 @@ const ANIMATIONS = {
     description: 'A celebratory fireworks animation for completing a board. This animation is designed to reward players when they successfully complete a level or board in your game. The colorful fireworks create a sense of achievement and celebration.',
     type: 'fireworks',
     controls: [
-      { id: 'speed', name: 'Speed', min: 0.1, max: 2, default: 1 },
-      { id: 'particles', name: 'Particles', min: 10, max: 100, default: 50 },
+      { id: 'speed', name: 'Speed', min: 0.1, max: 2, default: 1, step: 0.1 },
+      { id: 'particles', name: 'Particles', min: 10, max: 100, default: 50, step: 5 },
       { id: 'colors', name: 'Color Scheme', options: ['Rainbow', 'Gold', 'Blue', 'Custom'], default: 'Rainbow' }
     ]
   },
@@ -26,8 +29,8 @@ const ANIMATIONS = {
     description: 'Animation to celebrate achieving a high score. This animation creates an exciting visual reward when players beat their previous best score or reach a new milestone. The animation emphasizes the achievement with dynamic elements that draw attention to the score.',
     type: 'celebration',
     controls: [
-      { id: 'duration', name: 'Duration', min: 1, max: 5, default: 3 },
-      { id: 'intensity', name: 'Intensity', min: 1, max: 10, default: 5 },
+      { id: 'duration', name: 'Duration', min: 1, max: 5, default: 3, step: 0.5 },
+      { id: 'intensity', name: 'Intensity', min: 1, max: 10, default: 5, step: 1 },
       { id: 'sound', name: 'Sound Effect', options: ['Trumpet', 'Applause', 'Chime', 'None'], default: 'Applause' }
     ]
   },
@@ -37,7 +40,7 @@ const ANIMATIONS = {
     description: 'Animation to show the user is on a winning streak. This dynamic flame animation visually represents a player\'s hot streak, encouraging them to maintain their momentum. The intensity of the flames can be adjusted to match the significance of the streak.',
     type: 'flame',
     controls: [
-      { id: 'flame-height', name: 'Flame Height', min: 1, max: 10, default: 5 },
+      { id: 'flame-height', name: 'Flame Height', min: 1, max: 10, default: 5, step: 1 },
       { id: 'flame-color', name: 'Flame Color', options: ['Red-Orange', 'Blue', 'Green', 'Purple'], default: 'Red-Orange' },
       { id: 'smoke', name: 'Smoke Effect', options: ['None', 'Light', 'Heavy'], default: 'Light' }
     ]
@@ -47,21 +50,70 @@ const ANIMATIONS = {
 export default function AnimationDetailScreen() {
   const { id } = useLocalSearchParams();
   const router = useRouter();
-  const animation = ANIMATIONS[id];
+  const animation = ANIMATIONS[id as string];
   
   const [isPlaying, setIsPlaying] = useState(false);
-  const [controlValues, setControlValues] = useState({});
+  const [controlValues, setControlValues] = useState<Record<string, number | string>>({});
+  
+  const backgroundColor = useThemeColor({ light: '#f0f0f0', dark: '#333333' }, 'background');
+  const accentColor = useThemeColor({ light: '#007AFF', dark: '#0A84FF' }, 'tint');
+  
+  // Animation values for the preview
+  const scale = useSharedValue(1);
+  const opacity = useSharedValue(0.7);
+  const rotation = useSharedValue(0);
   
   // Initialize control values
-  React.useEffect(() => {
+  useEffect(() => {
     if (animation) {
-      const initialValues = {};
+      const initialValues: Record<string, number | string> = {};
       animation.controls.forEach(control => {
         initialValues[control.id] = control.default;
       });
       setControlValues(initialValues);
     }
   }, [animation]);
+
+  // Animation effects when playing
+  useEffect(() => {
+    if (isPlaying) {
+      // Start animation
+      scale.value = withTiming(1.1, { duration: 500, easing: Easing.inOut(Easing.ease) });
+      opacity.value = withTiming(1, { duration: 300 });
+      
+      // Create a rotation animation based on the animation type
+      if (animation.type === 'fireworks') {
+        rotation.value = 0; // Reset rotation
+        // No rotation for fireworks
+      } else if (animation.type === 'celebration') {
+        rotation.value = withTiming(360, { 
+          duration: 2000 * (controlValues['duration'] as number || 3),
+          easing: Easing.linear
+        });
+      } else if (animation.type === 'flame') {
+        // Subtle rotation for flame
+        rotation.value = withTiming(10, { 
+          duration: 1000, 
+          easing: Easing.inOut(Easing.ease)
+        });
+      }
+    } else {
+      // Reset animation
+      scale.value = withTiming(1, { duration: 300, easing: Easing.inOut(Easing.ease) });
+      opacity.value = withTiming(0.7, { duration: 300 });
+      rotation.value = withTiming(0, { duration: 300 });
+    }
+  }, [isPlaying, animation?.type, controlValues]);
+
+  const animatedStyle = useAnimatedStyle(() => {
+    return {
+      transform: [
+        { scale: scale.value },
+        { rotate: `${rotation.value}deg` }
+      ],
+      opacity: opacity.value,
+    };
+  });
 
   if (!animation) {
     return (
@@ -84,88 +136,24 @@ export default function AnimationDetailScreen() {
     );
   }
 
-  const renderControlItem = (control) => {
-    if (control.options) {
-      // Render options selector
-      return (
-        <View key={control.id} style={styles.controlItem}>
-          <ThemedText style={styles.controlLabel}>{control.name}</ThemedText>
-          <View style={styles.optionsContainer}>
-            {control.options.map(option => (
-              <TouchableOpacity
-                key={option}
-                style={[
-                  styles.optionButton,
-                  controlValues[control.id] === option && styles.optionButtonSelected
-                ]}
-                onPress={() => {
-                  setControlValues({
-                    ...controlValues,
-                    [control.id]: option
-                  });
-                }}
-              >
-                <ThemedText
-                  style={[
-                    styles.optionText,
-                    controlValues[control.id] === option && styles.optionTextSelected
-                  ]}
-                >
-                  {option}
-                </ThemedText>
-              </TouchableOpacity>
-            ))}
-          </View>
-        </View>
-      );
-    } else {
-      // Render slider for numeric values
-      return (
-        <View key={control.id} style={styles.controlItem}>
-          <View style={styles.controlHeader}>
-            <ThemedText style={styles.controlLabel}>{control.name}</ThemedText>
-            <ThemedText style={styles.controlValue}>{controlValues[control.id]}</ThemedText>
-          </View>
-          <View style={styles.sliderContainer}>
-            <TouchableOpacity
-              style={styles.sliderButton}
-              onPress={() => {
-                const newValue = Math.max(control.min, controlValues[control.id] - (control.max - control.min) / 10);
-                setControlValues({
-                  ...controlValues,
-                  [control.id]: Number(newValue.toFixed(1))
-                });
-              }}
-            >
-              <Ionicons name="remove" size={20} color="#007AFF" />
-            </TouchableOpacity>
-            
-            <View style={styles.sliderTrack}>
-              <View 
-                style={[
-                  styles.sliderFill, 
-                  { 
-                    width: `${((controlValues[control.id] - control.min) / (control.max - control.min)) * 100}%` 
-                  }
-                ]} 
-              />
-            </View>
-            
-            <TouchableOpacity
-              style={styles.sliderButton}
-              onPress={() => {
-                const newValue = Math.min(control.max, controlValues[control.id] + (control.max - control.min) / 10);
-                setControlValues({
-                  ...controlValues,
-                  [control.id]: Number(newValue.toFixed(1))
-                });
-              }}
-            >
-              <Ionicons name="add" size={20} color="#007AFF" />
-            </TouchableOpacity>
-          </View>
-        </View>
-      );
+  const handleControlChange = (controlId: string, value: number | string) => {
+    setControlValues(prev => ({
+      ...prev,
+      [controlId]: value
+    }));
+  };
+
+  // Get the appropriate icon based on animation type
+  const getAnimationIcon = () => {
+    switch (animation.type) {
+      case 'fireworks':
+        return 'sparkles';
+      case 'celebration':
+        return 'trophy';
+      case 'flame':
+        return 'flame';
+      default:
+        return 'star';
     }
   };
 
@@ -177,7 +165,7 @@ export default function AnimationDetailScreen() {
           headerShown: true,
           headerLeft: () => (
             <TouchableOpacity onPress={() => router.back()}>
-              <Ionicons name="arrow-back" size={24} color="#007AFF" />
+              <Ionicons name="arrow-back" size={24} color={accentColor} />
             </TouchableOpacity>
           ),
         }}
@@ -185,15 +173,29 @@ export default function AnimationDetailScreen() {
       
       <ScrollView style={styles.scrollView}>
         <View style={styles.animationContainer}>
-          <View style={styles.animationPlaceholder}>
-            <ThemedText style={styles.animationPlaceholderText}>
-              {isPlaying ? 'Animation Playing' : 'Animation Preview'}
+          <Animated.View 
+            style={[
+              styles.animationPreview, 
+              { backgroundColor: backgroundColor },
+              animatedStyle
+            ]}
+          >
+            <Ionicons 
+              name={getAnimationIcon()} 
+              size={80} 
+              color={accentColor} 
+            />
+            <ThemedText style={styles.animationPreviewText}>
+              {isPlaying ? 'Animation Playing' : 'Preview'}
             </ThemedText>
-          </View>
+          </Animated.View>
           
           <View style={styles.playbackControls}>
             <TouchableOpacity
-              style={[styles.playButton, isPlaying && styles.stopButton]}
+              style={[
+                styles.playButton, 
+                { backgroundColor: isPlaying ? '#FF3B30' : accentColor }
+              ]}
               onPress={() => setIsPlaying(!isPlaying)}
             >
               <Ionicons
@@ -216,7 +218,31 @@ export default function AnimationDetailScreen() {
         
         <View style={styles.controlsSection}>
           <ThemedText style={styles.controlsTitle}>Animation Controls</ThemedText>
-          {animation.controls.map(renderControlItem)}
+          {animation.controls.map(control => {
+            if (control.options) {
+              return (
+                <AnimationControl
+                  key={control.id}
+                  label={control.name}
+                  value={controlValues[control.id] || control.default}
+                  onChange={(value) => handleControlChange(control.id, value)}
+                  options={control.options}
+                />
+              );
+            } else {
+              return (
+                <AnimationControl
+                  key={control.id}
+                  label={control.name}
+                  value={controlValues[control.id] || control.default}
+                  onChange={(value) => handleControlChange(control.id, value)}
+                  min={control.min}
+                  max={control.max}
+                  step={control.step}
+                />
+              );
+            }
+          })}
         </View>
       </ScrollView>
     </ThemedView>
@@ -237,18 +263,20 @@ const styles = StyleSheet.create({
   },
   animationContainer: {
     padding: 16,
+    alignItems: 'center',
   },
-  animationPlaceholder: {
+  animationPreview: {
+    width: 200,
     height: 200,
-    borderRadius: 12,
-    backgroundColor: '#f0f0f0',
+    borderRadius: 16,
     justifyContent: 'center',
     alignItems: 'center',
-    marginBottom: 16,
+    marginBottom: 24,
   },
-  animationPlaceholderText: {
+  animationPreviewText: {
     fontSize: 16,
     opacity: 0.7,
+    marginTop: 12,
   },
   playbackControls: {
     flexDirection: 'row',
@@ -257,13 +285,9 @@ const styles = StyleSheet.create({
   playButton: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#007AFF',
     paddingHorizontal: 20,
-    paddingVertical: 10,
+    paddingVertical: 12,
     borderRadius: 25,
-  },
-  stopButton: {
-    backgroundColor: '#FF3B30',
   },
   playButtonText: {
     color: 'white',
@@ -293,74 +317,11 @@ const styles = StyleSheet.create({
   },
   controlsSection: {
     padding: 16,
+    paddingBottom: 32,
   },
   controlsTitle: {
     fontSize: 20,
     fontWeight: 'bold',
     marginBottom: 16,
-  },
-  controlItem: {
-    marginBottom: 20,
-  },
-  controlHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 8,
-  },
-  controlLabel: {
-    fontSize: 16,
-    fontWeight: '500',
-  },
-  controlValue: {
-    fontSize: 16,
-    opacity: 0.7,
-  },
-  sliderContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    height: 40,
-  },
-  sliderButton: {
-    width: 40,
-    height: 40,
-    justifyContent: 'center',
-    alignItems: 'center',
-    borderRadius: 20,
-    backgroundColor: '#f0f0f0',
-  },
-  sliderTrack: {
-    flex: 1,
-    height: 6,
-    backgroundColor: '#e0e0e0',
-    borderRadius: 3,
-    marginHorizontal: 8,
-    overflow: 'hidden',
-  },
-  sliderFill: {
-    height: '100%',
-    backgroundColor: '#007AFF',
-  },
-  optionsContainer: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    marginTop: 8,
-  },
-  optionButton: {
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 16,
-    backgroundColor: '#f0f0f0',
-    marginRight: 8,
-    marginBottom: 8,
-  },
-  optionButtonSelected: {
-    backgroundColor: '#007AFF',
-  },
-  optionText: {
-    fontSize: 14,
-  },
-  optionTextSelected: {
-    color: 'white',
   },
 });
